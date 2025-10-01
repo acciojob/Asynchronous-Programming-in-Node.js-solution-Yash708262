@@ -1,38 +1,44 @@
 const fs = require("fs");
 const http = require("http");
 const https = require("https");
-const { stdout } = require("process");
-const urlModule = require("url");
-const urls = process.argv.slice(2);
-if (urls.length === 0) {
-  console.error("Error: URLs array is empty. Please provide URLs to download.");
+
+const args = process.argv.slice(2);
+
+if (args.length < 2) {
+  console.error("Usage: node app.js <API_URL> <OUTPUT_FILE>");
   process.exit(1);
 }
 
-urls.forEach((url) => {
-  const protocol = url.startsWith("https") ? https : http;
-  const options = { method: "GET", headers: { "User-Agent": "Mozilla/5.0" } };
+const apiUrl = args[0];
+const filePath = args[1];
 
-  protocol
-    .get(url, options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
+// Select protocol (http or https)
+const protocol = apiUrl.startsWith("https") ? https : http;
+
+// Send GET request
+protocol.get(apiUrl, (res) => {
+  let data = "";
+
+  res.on("data", (chunk) => {
+    data += chunk;
+  });
+
+  res.on("end", () => {
+    try {
+      const jsonData = JSON.parse(data);
+
+      fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), (err) => {
+        if (err) {
+          console.error("❌ Error writing file:", err);
+          process.exit(1);
+        }
+        console.log("✅ Data saved to", filePath);
+        console.log(jsonData); // print JSON for test case verification
       });
-      res.on("end", () => {
-        const parsedUrl = urlModule.parse(url);
-        const hostname = parsedUrl.hostname;
-        const filename = `${hostname}.html`;
-        fs.writeFile(filename, data, (err) => {
-          if (err) {
-            console.error(`Error writing ${filename}: ${err}`);
-          } else {
-            console.log(`Downloaded ${url} to ${filename}`);
-          }
-        });
-      });
-    })
-    .on("error", (err) => {
-      console.error(`Error downloading ${url}: ${err}`);
-    });
+    } catch (err) {
+      console.error("❌ Error parsing JSON:", err);
+    }
+  });
+}).on("error", (err) => {
+  console.error("❌ Error fetching data:", err);
 });
